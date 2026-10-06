@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+salida/
+out/
+*.wav
+*.part
+# vídeos generados (el demo de examples/ sí se versiona)
+*.mp4
+!examples/*.mp4
+*.srt
+!examples/*.srt
+.cache/

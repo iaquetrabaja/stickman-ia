@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.pyc
+.venv
+venv
+salida
+out
+tests
+examples/*.mp4

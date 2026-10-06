@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stickman IA</title>
+<meta name="description" content="Crea vídeos explicativos con muñecos de palo a partir de un tema. Open source, con tu propia clave de Gemini.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#111; --muted:#666; --line:#ddd; --bg:#fff; --soft:#f6f6f6; --acc:#D24D1E; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Roboto, system-ui, sans-serif; color:var(--ink); background:var(--bg); line-height:1.45; }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+  header h1 { font-weight:900; font-size: 34px; margin:0; letter-spacing:-0.5px; }
+  header h1 span { color: var(--acc); }
+  header p { color: var(--muted); margin: 6px 0 0; }
+  section { border-top: 1px solid var(--line); padding: 24px 0; }
+  h2 { font-size: 18px; margin: 0 0 14px; font-weight: 700; display:flex; gap:10px; align-items:baseline; }
+  h2 b { color: var(--acc); font-weight: 900; }
+  label { display:block; font-weight:500; font-size:14px; margin: 12px 0 6px; }
+  input[type=text], input[type=password], textarea, select {
+    width:100%; font: inherit; font-size: 15px; padding: 10px 12px; border:1px solid #bbb; border-radius: 6px; background:#fff; color:var(--ink);
+  }
+  textarea { resize: vertical; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--acc); outline-offset: -1px; border-color: var(--acc); }
+  .row { display:flex; gap:12px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 160px; }
+  .check { display:flex; align-items:center; gap:8px; font-weight:400; font-size:14px; color:var(--muted); }
+  .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  .hint a, a { color: var(--acc); }
+  button { font: inherit; font-weight: 700; font-size: 15px; padding: 11px 18px; border-radius: 6px; border: 2px solid var(--ink);
+           background: var(--ink); color: #fff; cursor: pointer; }
+  button.sec { background:#fff; color: var(--ink); }
+  button.acc { background: var(--acc); border-color: var(--acc); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top: 16px; align-items:center; }
+  .msg { margin-top: 12px; font-size: 14px; padding: 10px 12px; border-radius: 6px; background: var(--soft); white-space: pre-wrap; }
+  .msg.err { background: #fbeae4; color: #8a2a0c; }
+  .hidden { display: none !important; }
+  .scene { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 12px 0; }
+  .scene .head { display:flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .scene .head b { color: var(--ink); }
+  .bar { height: 10px; background: var(--soft); border-radius: 5px; overflow: hidden; margin-top: 12px; }
+  .bar i { display:block; height:100%; width:0; background: var(--acc); transition: width .4s; }
+  video { width: 100%; max-height: 70vh; background:#000; border-radius: 8px; margin-top: 16px; }
+  .range { display:flex; align-items:center; gap: 12px; }
+  .range input { flex:1; accent-color: var(--acc); }
+  .range output { font-weight:700; min-width: 54px; text-align:right; }
+  .seg { display:flex; border:1px solid #bbb; border-radius:6px; overflow:hidden; }
+  .seg label { margin:0; flex:1; text-align:center; padding:10px; cursor:pointer; font-weight:500; }
+  .seg input { display:none; }
+  .seg label:has(input:checked) { background: var(--ink); color:#fff; }
+  footer { color: var(--muted); font-size: 13px; border-top:1px solid var(--line); padding-top: 18px; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Stickman <span>IA</span></h1>
+    <p>Escribe un tema y crea un vídeo explicativo con muñecos de palo, voz y subtítulos. Usa tu propia clave gratuita de Gemini.</p>
+  </header>
+
+  <section id="s-clave">
+    <h2><b>1</b> Tu clave de Gemini</h2>
+    <input type="password" id="clave" placeholder="AIza..." autocomplete="off" spellcheck="false">
+    <label class="check"><input type="checkbox" id="recordar"> Recordar la clave en este navegador (solo se guarda aquí, nunca en el servidor)</label>
+    <p class="hint">Consíguela gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. La clave se usa solo para tus peticiones y no se almacena.</p>
+    <div class="actions">
+      <button class="sec" id="b-modelos">Comprobar clave</button>
+      <button class="sec" id="b-ejemplo">Probar sin clave (guion de ejemplo)</button>
+    </div>
+    <div class="row hidden" id="modelos">
+      <div><label for="m-texto">Modelo de texto</label><select id="m-texto"></select></div>
+      <div><label for="m-tts">Modelo de voz</label><select id="m-tts"></select></div>
+    </div>
+    <div id="msg-clave" class="msg hidden"></div>
+  </section>
+
+  <section id="s-tema">
+    <h2><b>2</b> Tema del vídeo</h2>
+    <textarea id="tema" rows="2" maxlength="300" placeholder="Ej.: Por qué procrastinamos y cómo evitarlo"></textarea>
+    <div class="row">
+      <div><label for="idioma">Idioma</label><select id="idioma"></select></div>
+      <div><label>Formato</label>
+        <div class="seg">
+          <label><input type="radio" name="formato" value="9:16" checked> Vertical 9:16</label>
+          <label><input type="radio" name="formato" value="16:9"> Horizontal 16:9</label>
+        </div>
+      </div>
+    </div>
+    <label for="duracion">Duración aproximada</label>
+    <div class="range"><input type="range" id="duracion" min="15" max="__MAX__" step="5" value="45"><output id="dur-out">45 s</output></div>
+    <div class="actions"><button id="b-guion">Escribir guion</button></div>
+    <div id="msg-guion" class="msg hidden"></div>
+  </section>
+
+  <section id="s-revisar" class="hidden">
+    <h2><b>3</b> Revisa y edita el guion</h2>
+    <p class="hint" id="resumen"></p>
+    <label for="titulo">Título</label>
+    <input type="text" id="titulo" maxlength="120">
+    <div id="escenas"></div>
+    <details>
+      <summary class="hint" style="cursor:pointer">Editar el guion completo en JSON (personajes, poses, objetos, cámara...)</summary>
+      <textarea id="json" rows="18" spellcheck="false" style="font-family: ui-monospace, Consolas, monospace; font-size: 13px; margin-top:10px"></textarea>
+      <div class="actions"><button class="sec" id="b-aplicar">Aplicar JSON</button></div>
+    </details>
+    <div id="msg-revisar" class="msg hidden"></div>
+  </section>
+
+  <section id="s-render" class="hidden">
+    <h2><b>4</b> Voz y vídeo</h2>
+    <div class="row">
+      <div><label for="motor">Voz</label>
+        <select id="motor">
+          <option value="auto">Gemini (si falla, voz local)</option>
+          <option value="piper">Voz local Piper (sin clave)</option>
+        </select></div>
+      <div><label for="voz">Voz de Gemini</label><select id="voz"></select></div>
+    </div>
+    <div class="actions">
+      <button class="acc" id="b-render">Crear vídeo</button>
+      <span class="hint" id="cupo"></span>
+    </div>
+    <div id="progreso" class="hidden">
+      <div class="bar"><i id="bar"></i></div>
+      <div id="msg-render" class="msg"></div>
+    </div>
+    <div id="resultado" class="hidden">
+      <video id="video" controls playsinline></video>
+      <div class="actions">
+        <a id="dl-video" download><button class="acc">Descargar MP4</button></a>
+        <a id="dl-srt" download><button class="sec">Descargar subtítulos (SRT)</button></a>
+      </div>
+      <p class="hint">Los archivos se borran del servidor a las 24 horas.</p>
+    </div>
+  </section>
+
+  <footer>
+    Proyecto open source (MIT). Límite: __LIMITE__ vídeos por día y máximo __MAX__ s, un render a la vez.
+    Inspirado en <a href="https://github.com/21cabbagee/stickman-explainers" target="_blank" rel="noopener">stickman-explainers</a>.
+  </footer>
+</main>
+
+<script>
+(() => {
+  const BASE = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
+  const $ = (id) => document.getElementById(id);
+  const BG = ['papel','blanco','arena','menta','cielo','melocoton','lavanda','noche'];
+  const CAM = {static:'Fija', zoom_in:'Acercar', zoom_out:'Alejar', pan_left:'Panorámica izq.', pan_right:'Panorámica der.', punch_in:'Zoom de impacto'};
+  let script = null;
+
+  function show(el, text, err) {
+    el.textContent = text; el.classList.toggle('hidden', !text); el.classList.toggle('err', !!err);
+  }
+  async function api(path, body) {
+    const opt = body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)};
+    const r = await fetch(BASE + path, opt);
+    let data = null;
+    try { data = await r.json(); } catch (e) { data = {}; }
+    if (!r.ok) {
+      let d = data && data.detail;
+      if (Array.isArray(d)) d = d.map(x => (x.loc || []).slice(-1)[0] + ': ' + x.msg).join('\n');
+      throw new Error(d || ('Error ' + r.status));
+    }
+    return data;
+  }
+  function key() { return $('clave').value.trim(); }
+  function formato() { return document.querySelector('input[name=formato]:checked').value; }
+
+  // clave en localStorage solo si el usuario lo pide
+  try {
+    const k = localStorage.getItem('stickman_clave');
+    if (k) { $('clave').value = k; $('recordar').checked = true; }
+  } catch (e) {}
+  function persistKey() {
+    try {
+      if ($('recordar').checked && key()) localStorage.setItem('stickman_clave', key());
+      else localStorage.removeItem('stickman_clave');
+    } catch (e) {}
+  }
+  $('recordar').addEventListener('change', persistKey);
+  $('clave').addEventListener('change', persistKey);
+
+  $('duracion').addEventListener('input', () => { $('dur-out').textContent = $('duracion').value + ' s'; });
+
+  async function loadState() {
+    try {
+      const s = await api('api/estado');
+      $('idioma').innerHTML = Object.entries(s.idiomas).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+      $('voz').innerHTML = s.voces.map(v => `<option>${v}</option>`).join('');
+      updateQuota(s);
+    } catch (e) { console.error(e); }
+  }
+  function updateQuota(s) {
+    const left = Math.max(0, s.limite - s.usados);
+    $('cupo').textContent = `Te quedan ${left} de ${s.limite} vídeos hoy` + (s.cola ? ` · ${s.cola} en cola ahora` : '');
+  }
+
+  $('b-modelos').onclick = async () => {
+    const b = $('b-modelos'); b.disabled = true; show($('msg-clave'), 'Comprobando...');
+    try {
+      const m = await api('api/modelos', {clave: key()});
+      $('m-texto').innerHTML = m.texto.map(x => `<option>${x}</option>`).join('');
+      $('m-tts').innerHTML = m.tts.map(x => `<option>${x}</option>`).join('') + '<option value="">(usar voz local Piper)</option>';
+      $('modelos').classList.remove('hidden');
+      show($('msg-clave'), `Clave correcta. ${m.texto.length} modelos de texto y ${m.tts.length} de voz disponibles.`);
+      persistKey();
+    } catch (e) { show($('msg-clave'), e.message, true); }
+    b.disabled = false;
+  };
+
+  $('b-ejemplo').onclick = async () => {
+    try {
+      const s = await api('api/ejemplo');
+      $('motor').value = 'piper';
+      await setScript(s);
+      $('s-revisar').scrollIntoView({behavior:'smooth'});
+    } catch (e) { show($('msg-clave'), e.message, true); }
+  };
+
+  $('b-guion').onclick = async () => {
+    const b = $('b-guion');
+    if (!key()) return show($('msg-guion'), 'Primero pega tu clave de Gemini (paso 1), o prueba el guion de ejemplo.', true);
+    if ($('tema').value.trim().length < 3) return show($('msg-guion'), 'Escribe un tema.', true);
+    b.disabled = true; show($('msg-guion'), 'Gemini está escribiendo el guion (10-40 s)...');
+    try {
+      const r = await api('api/guion', {clave: key(), tema: $('tema').value.trim(), idioma: $('idioma').value,
+        formato: formato(), duracion: +$('duracion').value, modelo: $('m-texto').value || null});
+      show($('msg-guion'), `Guion escrito con ${r.modelo}.` + (r.avisos.length ? `\nAvisos corregidos: ${r.avisos.length}` : ''));
+      await setScript(r.script);
+      $('s-revisar').scrollIntoView({behavior:'smooth'});
+    } catch (e) { show($('msg-guion'), e.message, true); }
+    b.disabled = false;
+  };
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function renderScenes() {
+    $('titulo').value = script.title || '';
+    $('escenas').innerHTML = script.scenes.map((s, i) => {
+      const kw = (s.keywords && s.keywords[0]) ? s.keywords[0].text : '';
+      const who = (s.characters || []).map(c => c.id).join(', ') || 'sin personajes';
+      const props = (s.props || []).map(p => p.type).join(', ');
+      const cam = typeof s.camera === 'string' ? s.camera : 'static';
+      return `<div class="scene" data-i="${i}">
+        <div class="head"><b>Escena ${i + 1}</b><span>${esc(who)}${props ? ' · ' + esc(props) : ''}</span></div>
+        <label>Narración</label><textarea rows="3" data-f="narration" maxlength="700">${esc(s.narration)}</textarea>
+        <div class="row">
+          <div><label>Texto en pantalla</label><input type="text" data-f="keyword" maxlength="48" value="${esc(kw)}"></div>
+          <div><label>Fondo</label><select data-f="background">${BG.map(b => `<option ${b === s.background ? 'selected' : ''}>${b}</option>`).join('')}${BG.includes(s.background) ? '' : `<option selected>${esc(s.background)}</option>`}</select></div>
+          <div><label>Cámara</label><select data-f="camera">${Object.entries(CAM).map(([k, v]) => `<option value="${k}" ${k === cam ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+        </div></div>`;
+    }).join('');
+    $('json').value = JSON.stringify(script, null, 2);
+  }
+
+  $('escenas').addEventListener('input', (ev) => {
+    const el = ev.target, card = el.closest('.scene');
+    if (!card || !script) return;
+    const s = script.scenes[+card.dataset.i], f = el.dataset.f;
+    if (f === 'narration') s.narration = el.value;
+    else if (f === 'keyword') {
+      if (el.value.trim()) { s.keywords = s.keywords && s.keywords.length ? s.keywords : [{text: '', at: 0.1}]; s.keywords[0].text = el.value; }
+      else s.keywords = [];
+    } else if (f === 'background') s.background = el.value;
+    else if (f === 'camera') s.camera = el.value;
+    $('json').value = JSON.stringify(script, null, 2);
+    scheduleValidate();
+  });
+  $('titulo').addEventListener('input', () => { if (script) { script.title = $('titulo').value; $('json').value = JSON.stringify(script, null, 2); } });
+
+  let vt = null;
+  function scheduleValidate() { clearTimeout(vt); vt = setTimeout(() => validate(false), 700); }
+
+  async function validate(replace) {
+    try {
+      const r = await api('api/validar', {script});
+      if (!r.ok) { show($('msg-revisar'), 'El guion tiene errores:\n- ' + r.errores.join('\n- '), true); $('b-render').disabled = true; return false; }
+      if (replace) { script = r.script; renderScenes(); }
+      const words = script.scenes.reduce((n, s) => n + s.narration.split(/\s+/).filter(Boolean).length, 0);
+      $('resumen').textContent = `${script.scenes.length} escenas · ${words} palabras · unos ${Math.round(r.segundos_estimados)} s de vídeo`;
+      show($('msg-revisar'), r.avisos.length ? 'Ajustes automáticos:\n- ' + r.avisos.join('\n- ') : '');
+      $('b-render').disabled = false;
+      return true;
+    } catch (e) { show($('msg-revisar'), e.message, true); return false; }
+  }
+
+  async function setScript(s) {
+    script = s;
+    $('s-revisar').classList.remove('hidden');
+    $('s-render').classList.remove('hidden');
+    renderScenes();
+    await validate(true);
+  }
+
+  $('b-aplicar').onclick = async () => {
+    try { script = JSON.parse($('json').value); } catch (e) { return show($('msg-revisar'), 'JSON no válido: ' + e.message, true); }
+    await validate(true);
+  };
+
+  let poll = null;
+  $('b-render').onclick = async () => {
+    if (!(await validate(false))) return;
+    const b = $('b-render'); b.disabled = true;
+    $('resultado').classList.add('hidden'); $('progreso').classList.remove('hidden');
+    $('bar').style.width = '0%';
+    show($('msg-render'), 'Enviando...');
+    try {
+      const motor = $('motor').value === 'piper' || !key() || $('m-tts').value === '' && !$('modelos').classList.contains('hidden') ? 'piper' : 'auto';
+      const r = await api('api/render', {script, formato: formato(), motor, voz: $('voz').value,
+        clave: motor === 'piper' ? null : key(), modelo_tts: $('m-tts').value || null});
+      track(r.id);
+    } catch (e) { show($('msg-render'), e.message, true); b.disabled = false; }
+  };
+
+  function track(id) {
+    clearInterval(poll);
+    const tick = async () => {
+      try {
+        const j = await api('api/trabajo/' + id);
+        $('bar').style.width = Math.round((j.progreso || 0) * 100) + '%';
+        if (j.estado === 'en_cola') show($('msg-render'), `En cola: posición ${j.posicion}. Se renderiza un vídeo a la vez.`);
+        else if (j.estado === 'renderizando') show($('msg-render'), `${j.mensaje || 'Renderizando'} · ${Math.round((j.progreso || 0) * 100)} %`);
+        else if (j.estado === 'terminado') {
+          clearInterval(poll);
+          show($('msg-render'), `Listo: ${Math.round(j.duracion || 0)} s de vídeo · voz ${j.voz || ''} · render ${j.render_s || '?'} s`);
+          $('video').src = BASE + j.video; $('dl-video').href = BASE + j.video; $('dl-srt').href = BASE + j.srt;
+          $('resultado').classList.remove('hidden'); $('b-render').disabled = false; loadState();
+        } else if (j.estado === 'error') {
+          clearInterval(poll); show($('msg-render'), j.mensaje || 'Error', true); $('b-render').disabled = false; loadState();
+        }
+      } catch (e) { show($('msg-render'), e.message, true); }
+    };
+    tick(); poll = setInterval(tick, 1500);
+  }
+
+  loadState();
+})();
+</script>
+</body>
+</html>

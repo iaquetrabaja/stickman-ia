@@ -1,0 +1,11 @@
+# Render
+skia-python>=87.6
+numpy>=1.26
+# Guion / validación
+pydantic>=2.5
+PyYAML>=6.0
+# Voz local (descarga la voz es_ES automáticamente la primera vez)
+piper-tts>=1.3.0
+# Web
+fastapi>=0.110
+uvicorn>=0.29

@@ -1,0 +1,83 @@
+{
+  "title": "La IA no te quita el trabajo (todavía)",
+  "language": "es",
+  "description": "Cómo usar la IA para ganar una hora al día. #ia #productividad #trabajo",
+  "cast": [
+    {"id": "dani", "name": "Dani", "preset": {"hair": "short", "accessory": "glasses", "color": "#D24D1E"}},
+    {"id": "lucia", "name": "Lucía", "preset": {"hair": "long", "accessory": "none", "color": "#2F6FB0", "hair_color": "#5A3A22"}}
+  ],
+  "scenes": [
+    {
+      "id": "gancho",
+      "narration": "Pierdes casi una hora al día en tareas que una IA haría en dos minutos.",
+      "speaker": "dani",
+      "background": "papel",
+      "camera": "punch_in",
+      "keywords": [{"text": "1 hora al día", "at": 0.05}],
+      "characters": [
+        {"id": "dani", "x": -0.2, "enter": "left", "pose": "talk", "expression": "surprised",
+         "actions": [{"at": 0.45, "pose": "point", "expression": "happy"}]}
+      ],
+      "props": [{"type": "clock", "x": 0.55, "at": 0.3}]
+    },
+    {
+      "id": "problema",
+      "narration": "Correos, resúmenes, informes. Lo haces todo a mano y al final del día estás agotado.",
+      "speaker": "dani",
+      "background": "arena",
+      "camera": "zoom_in",
+      "keywords": [{"text": "Todo a mano", "at": 0.1}],
+      "characters": [
+        {"id": "dani", "x": -0.35, "pose": "sit", "expression": "sad", "facing": "right",
+         "actions": [{"at": 0.6, "pose": "sad"}]}
+      ],
+      "props": [
+        {"type": "desk", "x": 0.25},
+        {"type": "laptop", "x": 0.25, "at": 0.0},
+        {"type": "coffee", "x": 0.45, "at": 0.3}
+      ]
+    },
+    {
+      "id": "idea",
+      "narration": "Lucía hizo algo distinto: le pidió a la IA el primer borrador de todo.",
+      "speaker": "lucia",
+      "background": "menta",
+      "camera": "static",
+      "keywords": [{"text": "Primer borrador", "at": 0.3}],
+      "characters": [
+        {"id": "lucia", "x": 0.4, "enter": "right", "pose": "talk", "expression": "happy", "facing": "left",
+         "actions": [{"at": 0.55, "pose": "present"}]},
+        {"id": "dani", "x": -0.45, "pose": "think", "expression": "thinking",
+         "actions": [{"at": 0.7, "expression": "surprised", "pose": "idle"}]}
+      ],
+      "props": [{"type": "lightbulb", "holder": "dani", "at": 0.72}]
+    },
+    {
+      "id": "resultado",
+      "narration": "Ella solo revisa y corrige. Resultado: termina antes y con mejores ideas.",
+      "speaker": "lucia",
+      "background": "cielo",
+      "camera": "zoom_out",
+      "keywords": [{"text": "Revisa y corrige", "at": 0.05}, {"text": "+ productividad", "at": 0.55}],
+      "characters": [
+        {"id": "lucia", "x": -0.3, "pose": "talk", "expression": "happy",
+         "actions": [{"at": 0.5, "pose": "cheer"}, {"at": 0.75, "pose": "jump"}]}
+      ],
+      "props": [{"type": "chart", "x": 0.5, "at": 0.45, "trend": "up"}]
+    },
+    {
+      "id": "cierre",
+      "narration": "La IA no te quita el trabajo. Te quita la parte aburrida.",
+      "speaker": "dani",
+      "background": "papel",
+      "camera": "zoom_in",
+      "keywords": [{"text": "Fuera lo aburrido", "at": 0.45}],
+      "characters": [
+        {"id": "dani", "x": -0.45, "pose": "talk", "expression": "neutral",
+         "actions": [{"at": 0.5, "expression": "happy", "pose": "wave"}]},
+        {"id": "lucia", "x": 0.45, "pose": "arms_crossed", "expression": "happy"}
+      ],
+      "props": [{"type": "speech_bubble", "holder": "lucia", "text": "¡Exacto!", "at": 0.55}]
+    }
+  ]
+}

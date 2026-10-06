@@ -1,0 +1,53 @@
+# Guion de ejemplo en YAML (formato 16:9 recomendado). Render:
+#   python -m stickman --guion examples/regla-2-minutos.yaml --formato 16:9 --offline
+title: "La regla de los 2 minutos"
+language: es
+cast:
+  - id: marta
+    name: Marta
+    preset: {hair: bun, accessory: headphones, color: "#2E8B6A"}
+  - id: leo
+    name: Leo
+    preset: {hair: curly, accessory: none, color: "#7A4FB5"}
+scenes:
+  - id: s1
+    narration: "Si algo te lleva menos de dos minutos, hazlo ahora. No lo apuntes, no lo pospongas."
+    speaker: marta
+    background: papel
+    camera: punch_in
+    keywords: [{text: "2 minutos", at: 0.05}]
+    characters:
+      - {id: marta, x: -0.3, enter: pop, pose: point, expression: happy}
+    props:
+      - {type: clock, x: 0.45, at: 0.2}
+  - id: s2
+    narration: "Leo apuntaba cada mini tarea en una lista infinita. La lista crecía más rápido que él."
+    speaker: leo
+    background: lavanda
+    camera: zoom_in
+    keywords: [{text: "Lista infinita", at: 0.2}]
+    characters:
+      - id: leo
+        x: 0.0
+        pose: shrug
+        expression: sad
+        actions:
+          - {at: 0.55, pose: think, expression: thinking}
+    props:
+      - {type: thought_bubble, holder: leo, text: "¿Y ahora qué?", at: 0.6}
+  - id: s3
+    narration: "Ahora contesta ese mensaje al momento y su cabeza queda libre para lo importante."
+    speaker: leo
+    background: menta
+    camera: static
+    keywords: [{text: "Cabeza libre", at: 0.4}]
+    characters:
+      - id: leo
+        x: -0.4
+        pose: talk
+        expression: happy
+        actions:
+          - {at: 0.6, pose: cheer}
+      - {id: marta, x: 0.45, pose: arms_crossed, expression: happy, enter: right}
+    props:
+      - {type: phone, holder: leo, at: 0.1, until: 0.55}
