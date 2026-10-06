@@ -129,6 +129,7 @@ def render_script(script: Script, out_dir: str | Path, fmt: str = "9:16", engine
     cues, stats.caption_timing = timed_captions(texts, ranges, track, script.language, L.caption_words,
                                                 L.caption_chars, word_align, log)
     stats.align_seconds = time.time() - ta
+    align.release()  # el render es lo que más memoria usa: fuera el modelo
     prog("subtitulos", 1.0)
     wav = out / f"{basename}.wav"
     write_wav(wav, track)
