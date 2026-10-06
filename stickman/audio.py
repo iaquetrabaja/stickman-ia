@@ -35,7 +35,7 @@ def read_wav(path: str | Path) -> Tuple[np.ndarray, int]:
 
 def write_wav(path: str | Path, samples: np.ndarray, sr: int = SR) -> None:
     pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2")
-    with wave.open(str(path), "wb") as w:
+    with wave.open(path if hasattr(path, "write") else str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(sr)

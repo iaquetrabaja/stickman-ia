@@ -20,8 +20,26 @@ EXCLUDE = ("tts", "image", "audio", "live", "embedding", "vision", "robotics", "
            "gemma", "aqa", "imagen", "veo", "nano", "lyria", "omni", "transcribe", "antigravity",
            "deep-research", "customtools", "learnlm", "thinking-exp")
 
-TTS_VOICES = ["Puck", "Kore", "Charon", "Aoede", "Fenrir", "Leda", "Orus", "Zephyr", "Sadachbia",
-              "Achird", "Sulafat", "Algenib"]
+# Voces precompiladas de Gemini TTS con su carácter según Google
+# (https://ai.google.dev/gemini-api/docs/speech-generation#voices), traducido.
+TTS_VOICE_INFO = {
+    "Zephyr": "brillante", "Puck": "animada", "Charon": "informativa", "Kore": "firme",
+    "Fenrir": "enérgica", "Leda": "juvenil", "Orus": "firme", "Aoede": "desenfadada",
+    "Callirrhoe": "tranquila", "Autonoe": "brillante", "Enceladus": "suave, aspirada", "Iapetus": "clara",
+    "Umbriel": "tranquila", "Algieba": "suave", "Despina": "suave", "Erinome": "clara",
+    "Algenib": "grave, rasgada", "Rasalgethi": "informativa", "Laomedeia": "animada", "Achernar": "suave",
+    "Alnilam": "firme", "Schedar": "equilibrada", "Gacrux": "madura", "Pulcherrima": "directa",
+    "Achird": "cercana", "Zubenelgenubi": "informal", "Vindemiatrix": "amable", "Sadachbia": "viva",
+    "Sadaltager": "experta", "Sulafat": "cálida",
+}
+TTS_VOICES = list(TTS_VOICE_INFO)
+DEFAULT_VOICE = "Puck"
+
+
+def voice_label(voice: str) -> str:
+    """'Charon — informativa' (para los desplegables)."""
+    info = TTS_VOICE_INFO.get(voice)
+    return f"{voice} — {info}" if info else voice
 
 
 class GeminiError(RuntimeError):
@@ -171,7 +189,9 @@ def generate_json(key: str, model: str, prompt: str, temperature: float = 0.9) -
 
 def tts(key: str, model: str, text: str, voice: str = "Puck", style: str = "",
         retries: int = 2, on_wait: Optional[Callable[[float], None]] = None) -> Tuple[bytes, int]:
-    """Devuelve (PCM 16 bits mono, frecuencia)."""
+    """Devuelve (PCM 16 bits mono, frecuencia).
+
+    Usa ``style=""`` (lo normal): los modelos TTS a veces leen en voz alta las instrucciones de estilo."""
     prompt = f"{style.strip()}\n\n{text}" if style else text
     body = {
         "contents": [{"parts": [{"text": prompt}]}],

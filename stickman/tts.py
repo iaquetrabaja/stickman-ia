@@ -25,14 +25,6 @@ PIPER_VOICES = {
 }
 HF = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 
-STYLE = {
-    "es": "Lee este guion en español de España, con tono cercano, enérgico y natural, como un "
-          "creador de contenido de vídeos cortos: ritmo ágil, sin pausas largas, y solo una pausa "
-          "breve entre párrafos:",
-    "en": "Read this script in a warm, energetic, natural tone, like a short-form video creator: "
-          "brisk pace, no long pauses, only a brief pause between paragraphs:",
-}
-
 Progress = Callable[[str], None]
 
 
@@ -86,16 +78,68 @@ def piper_synth(texts: List[str], lang: str, log: Progress = print, rate: float 
     return out
 
 
+# Segundos de habla esperables por carácter (voces de Gemini en español: ~14-16 caracteres/s).
+CHARS_PER_SEC = 14.0
+MAX_RATIO = 1.45   # si el audio dura más que esto x lo esperado, ha leído algo que no es el guion
+
+
+def _too_long(audio: np.ndarray, text: str) -> bool:
+    expected = max(1.5, len(text) / CHARS_PER_SEC)
+    return len(audio) / SR > expected * MAX_RATIO + 1.0
+
+
 def gemini_synth(texts: List[str], lang: str, key: str, model: str, voice: str,
                  log: Progress = print) -> List[np.ndarray]:
-    style = STYLE.get(lang, STYLE["en"])
+    """Voz con Gemini. NO se envía ninguna instrucción de estilo: los modelos TTS a veces la leen en voz alta.
+    El tono lo da la voz elegida. Se comprueba la duración; si sale larga se repite y después se va escena a escena."""
+    wait = lambda s: log(f"Gemini ocupado, reintento en {s:.0f} s...")  # noqa: E731
     full = "\n\n".join(texts)
     log(f"Generando voz con {model} ({voice})...")
-    pcm, sr = gemini.tts(key, model, full, voice=voice, style=style,
-                         on_wait=lambda s: log(f"Gemini ocupado, reintento en {s:.0f} s..."))
-    a = trim_silence(resample(pcm16_to_float(pcm), sr, SR))
-    pieces = split_by_gaps(a, [len(t) for t in texts])
-    return [trim_silence(p) for p in pieces]
+    for intento in range(2):
+        pcm, sr = gemini.tts(key, model, full, voice=voice, style="", on_wait=wait)
+        a = trim_silence(resample(pcm16_to_float(pcm), sr, SR))
+        if not _too_long(a, full):
+            pieces = split_by_gaps(a, [len(t) for t in texts])
+            return [trim_silence(p) for p in pieces]
+        log("La voz ha salido más larga de lo normal; se repite" + (" escena a escena" if intento else "") + "...")
+    out = []   # último recurso: una llamada por escena, cada audio validado por separado
+    for t in texts:
+        best = None
+        for _ in range(2):
+            pcm, sr = gemini.tts(key, model, t, voice=voice, style="", on_wait=wait)
+            best = trim_silence(resample(pcm16_to_float(pcm), sr, SR))
+            if not _too_long(best, t):
+                break
+        out.append(best)
+    return out
+
+
+VOICE_SAMPLE = {
+    "es": "Hola, soy la voz {nombre}. Así sonará la narración de tu vídeo.",
+    "en": "Hi, I'm the voice {nombre}. This is how your video's narration will sound.",
+    "pt": "Olá, eu sou a voz {nombre}. É assim que vai soar a narração do seu vídeo.",
+    "fr": "Bonjour, je suis la voix {nombre}. Voici comment sonnera la narration de ta vidéo.",
+    "it": "Ciao, sono la voce {nombre}. Così suonerà la narrazione del tuo video.",
+    "de": "Hallo, ich bin die Stimme {nombre}. So wird die Erzählung deines Videos klingen.",
+}
+
+
+def voice_sample(nombre: str, lang: str = "es") -> str:
+    return VOICE_SAMPLE.get(lang, VOICE_SAMPLE["es"]).format(nombre=nombre)
+
+
+def preview(lang: str = "es", engine: str = "gemini", key: Optional[str] = None, model: Optional[str] = None,
+            voice: str = "Puck") -> np.ndarray:
+    """Una frase corta con la voz elegida (24 kHz), para oírla antes de generar el vídeo."""
+    if engine == "piper":
+        audio = piper_synth([voice_sample("local", lang)], lang, log=lambda _m: None)[0]
+    else:
+        model = model or gemini.list_models(key).best_tts
+        if not model:
+            raise gemini.GeminiError("Tu clave no tiene ningún modelo de voz de Gemini. Usa la voz local.")
+        pcm, sr = gemini.tts(key, model, voice_sample(voice, lang), voice=voice, style="", retries=1)
+        audio = trim_silence(resample(pcm16_to_float(pcm), sr, SR))
+    return normalize(audio)
 
 
 def synthesize(texts: List[str], lang: str = "es", engine: str = "auto", key: Optional[str] = None,

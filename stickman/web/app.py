@@ -7,9 +7,11 @@ Variables de entorno:
   MAX_SEGUNDOS   duración máxima del vídeo (120)
   MAX_COLA       trabajos máximos en cola (20)
   HORAS_BORRADO  horas que se guardan los archivos (24)
+  PRUEBAS_VOZ_HORA  pruebas de voz por IP y hora (20)
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 import secrets
@@ -24,7 +26,7 @@ from pathlib import Path
 from typing import Any, Deque, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from .. import gemini
@@ -39,6 +41,7 @@ MAX_SECONDS = int(os.environ.get("MAX_SEGUNDOS", "120"))
 MAX_QUEUE = int(os.environ.get("MAX_COLA", "20"))
 KEEP_HOURS = float(os.environ.get("HORAS_BORRADO", "24"))
 RENDER_SCALE = float(os.environ.get("ESCALA_RENDER", "1.0"))
+PREVIEWS_PER_HOUR = int(os.environ.get("PRUEBAS_VOZ_HORA", "20"))
 
 DATA = data_dir()
 JOBS = DATA / "jobs"
@@ -111,6 +114,37 @@ class Limits:
 
 
 limits = Limits(LIMITS_FILE)
+
+
+class HourlyLimit:
+    """Límite en memoria por IP en una ventana deslizante de una hora (pruebas de voz)."""
+
+    def __init__(self, per_hour: int):
+        self.per_hour = per_hour
+        self.hits: Dict[str, Deque[float]] = {}
+        self.lock = threading.Lock()
+
+    def take(self, ip: str) -> bool:
+        now = time.time()
+        with self.lock:
+            q = self.hits.setdefault(ip, deque())
+            while q and q[0] < now - 3600:
+                q.popleft()
+            if len(q) >= self.per_hour:
+                return False
+            q.append(now)
+            if len(self.hits) > 5000:   # no crecer sin límite
+                self.hits = {k: v for k, v in self.hits.items() if v and v[-1] > now - 3600}
+            return True
+
+    def give_back(self, ip: str) -> None:
+        with self.lock:
+            q = self.hits.get(ip)
+            if q:
+                q.pop()
+
+
+preview_limit = HourlyLimit(PREVIEWS_PER_HOUR)
 
 
 class Job:
@@ -247,11 +281,19 @@ class ValidateIn(BaseModel):
     script: Any
 
 
+class PreviewIn(BaseModel):
+    clave: Optional[str] = Field(None, max_length=200)
+    voz: str = gemini.DEFAULT_VOICE
+    modelo: Optional[str] = Field(None, max_length=100)
+    motor: str = "gemini"   # gemini | piper
+    idioma: str = "es"
+
+
 class RenderIn(BaseModel):
     script: Any
     formato: str = "9:16"
     motor: str = "auto"
-    voz: str = "Puck"
+    voz: str = gemini.DEFAULT_VOICE
     clave: Optional[str] = Field(None, max_length=200)
     modelo_tts: Optional[str] = None
 
@@ -269,7 +311,8 @@ def estado(req: Request) -> dict:
     with queue.lock:
         cola = len(queue.pending) + (1 if queue.current else 0)
     return {"cola": cola, "usados": limits.used(ip), "limite": LIMIT, "max_segundos": MAX_SECONDS,
-            "idiomas": LANGUAGES, "voces": gemini.TTS_VOICES}
+            "idiomas": LANGUAGES, "voces": gemini.TTS_VOICES, "voces_info": gemini.TTS_VOICE_INFO,
+            "voz_defecto": gemini.DEFAULT_VOICE}
 
 
 @app.post("/api/modelos")
@@ -279,6 +322,37 @@ def modelos(body: KeyIn) -> dict:
     except gemini.GeminiError as e:
         raise HTTPException(400, str(e))
     return {"texto": m.text, "tts": m.tts}
+
+
+@app.post("/api/probar-voz")
+def probar_voz(body: PreviewIn, req: Request) -> Response:
+    """Lee una frase corta con la voz elegida y devuelve un WAV. La clave no se guarda ni se registra."""
+    from .. import tts
+    from ..audio import write_wav
+
+    if body.motor not in ("gemini", "piper"):
+        raise HTTPException(400, "Motor de voz no válido")
+    key = (body.clave or "").strip()
+    if body.motor == "gemini":
+        if body.voz not in gemini.TTS_VOICE_INFO:
+            raise HTTPException(400, "Voz no válida")
+        if len(key) < 10:
+            raise HTTPException(400, "Pega tu clave de Gemini (paso 1) para probar las voces de Gemini.")
+    ip = client_ip(req)
+    if not preview_limit.take(ip):
+        raise HTTPException(429, f"Has alcanzado el límite de {PREVIEWS_PER_HOUR} pruebas de voz por hora.")
+    lang = body.idioma if body.idioma in LANGUAGES else "es"
+    try:
+        audio = tts.preview(lang, body.motor, key or None, body.modelo, body.voz)
+    except gemini.GeminiError as e:
+        preview_limit.give_back(ip)
+        raise HTTPException(429 if e.quota else 400, str(e))
+    except Exception:  # noqa: BLE001
+        preview_limit.give_back(ip)
+        raise HTTPException(500, "No se pudo generar la prueba de voz. Inténtalo de nuevo.")
+    buf = io.BytesIO()
+    write_wav(buf, audio)
+    return Response(buf.getvalue(), media_type="audio/wav", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/ejemplo")

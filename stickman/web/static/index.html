@@ -54,6 +54,10 @@
   .seg label:has(input:checked) { background: var(--ink); color:#fff; }
   footer { color: var(--muted); font-size: 13px; border-top:1px solid var(--line); padding-top: 18px; }
   code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  .pick { display:flex; gap:10px; align-items:stretch; }
+  .pick select { flex:1; min-width:0; }
+  .pick button { white-space: nowrap; }
+  audio { display:block; width:100%; margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -113,14 +117,19 @@
 
   <section id="s-render" class="hidden">
     <h2><b>4</b> Voz y vídeo</h2>
-    <div class="row">
-      <div><label for="motor">Voz</label>
-        <select id="motor">
-          <option value="auto">Gemini (si falla, voz local)</option>
-          <option value="piper">Voz local Piper (sin clave)</option>
-        </select></div>
-      <div><label for="voz">Voz de Gemini</label><select id="voz"></select></div>
+    <label for="voz">Voz (puedes elegirla)</label>
+    <div class="pick">
+      <select id="voz" aria-describedby="voz-hint"></select>
+      <button class="sec" id="b-probar" type="button">Probar voz</button>
     </div>
+    <p class="hint" id="voz-hint">Elige la voz que más te guste y pruébala antes de generar.</p>
+    <label for="motor">Motor de voz</label>
+    <select id="motor">
+      <option value="auto">Gemini (si falla, voz local)</option>
+      <option value="piper">Voz local Piper (sin clave)</option>
+    </select>
+    <audio id="audio-voz" controls preload="none" class="hidden"></audio>
+    <div id="msg-voz" class="msg hidden"></div>
     <div class="actions">
       <button class="acc" id="b-render">Crear vídeo</button>
       <span class="hint" id="cupo"></span>
@@ -191,7 +200,8 @@
     try {
       const s = await api('api/estado');
       $('idioma').innerHTML = Object.entries(s.idiomas).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
-      $('voz').innerHTML = s.voces.map(v => `<option>${v}</option>`).join('');
+      const info = s.voces_info || {}, def = s.voz_defecto || 'Puck';
+      $('voz').innerHTML = s.voces.map(v => `<option value="${v}" ${v === def ? 'selected' : ''}>${info[v] ? v + ' — ' + info[v] : v}</option>`).join('');
       updateQuota(s);
     } catch (e) { console.error(e); }
   }
@@ -216,7 +226,7 @@
   $('b-ejemplo').onclick = async () => {
     try {
       const s = await api('api/ejemplo');
-      $('motor').value = 'piper';
+      $('motor').value = 'piper'; syncVoice();
       await setScript(s);
       $('s-revisar').scrollIntoView({behavior:'smooth'});
     } catch (e) { show($('msg-clave'), e.message, true); }
@@ -300,6 +310,40 @@
   $('b-aplicar').onclick = async () => {
     try { script = JSON.parse($('json').value); } catch (e) { return show($('msg-revisar'), 'JSON no válido: ' + e.message, true); }
     await validate(true);
+  };
+
+  // ---- voz: probar antes de generar ----
+  let audioUrl = null;
+  function syncVoice() {
+    const local = $('motor').value === 'piper';
+    $('voz').disabled = local;
+    $('b-probar').textContent = local ? 'Probar voz local' : 'Probar voz';
+  }
+  $('motor').addEventListener('change', syncVoice);
+  $('voz').addEventListener('change', () => show($('msg-voz'), ''));
+  $('b-probar').onclick = async () => {
+    const motor = $('motor').value === 'piper' ? 'piper' : 'gemini';
+    if (motor === 'gemini' && !key())
+      return show($('msg-voz'), 'Para oír las voces de Gemini pega tu clave (paso 1). La voz local se puede probar sin clave.', true);
+    const b = $('b-probar'); b.disabled = true;
+    show($('msg-voz'), motor === 'piper' ? 'Generando la voz local...' : `Generando la voz ${$('voz').value}...`);
+    try {
+      const r = await fetch(BASE + 'api/probar-voz', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({clave: motor === 'gemini' ? key() : null, voz: $('voz').value, motor,
+          idioma: (script && script.language) || $('idioma').value, modelo: $('m-tts').value || null})});
+      if (!r.ok) {
+        let m = 'Error ' + r.status;
+        try { const d = await r.json(); if (typeof d.detail === 'string') m = d.detail; } catch (e) {}
+        throw new Error(m);
+      }
+      const blob = await r.blob();
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      audioUrl = URL.createObjectURL(blob);
+      const a = $('audio-voz'); a.src = audioUrl; a.classList.remove('hidden');
+      show($('msg-voz'), '');
+      try { await a.play(); } catch (e) {}
+    } catch (e) { show($('msg-voz'), e.message, true); }
+    b.disabled = false;
   };
 
   let poll = null;

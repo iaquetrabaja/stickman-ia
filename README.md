@@ -143,8 +143,8 @@ python -m stickman --offline
 python -m stickman --guion examples/regla-2-minutos.yaml --formato 16:9 --motor-voz piper
 ```
 
-Opciones útiles: `--idioma en`, `--voz Kore` (voces de Gemini: Puck, Kore, Charon, Aoede, Fenrir, Leda,
-Orus, Zephyr...), `--motor-voz auto|gemini|piper`, `--modelo` / `--modelo-tts` para forzar modelos,
+Opciones útiles: `--idioma en`, `--voz Kore` (30 voces de Gemini; en la web se pueden probar antes de generar: Puck (animada), Charon (informativa), Kore (firme), Sulafat (cálida), Achird (cercana),
+Leda, Zephyr...), `--motor-voz auto|gemini|piper`, `--modelo` / `--modelo-tts` para forzar modelos,
 `--escala 0.667` (renderiza a 720p y reescala con ffmpeg, más rápido en máquinas lentas), `--salida`,
 `--nombre`. La duración máxima es 120 s. La duración final es aproximada (±20 %): depende del ritmo de la voz.
 
