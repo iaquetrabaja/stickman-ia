@@ -36,8 +36,9 @@ def main() -> int:
 
     def progress(stage: str, p: float) -> None:
         state["etapa"] = stage
-        # voz = 0-15 %, render = 15-100 %
-        state["progreso"] = round(p * 0.15 if stage == "voz" else 0.15 + 0.85 * p, 4)
+        # voz = 0-12 %, subtítulos (alineación) = 12-18 %, render = 18-100 %
+        base, span = {"voz": (0.0, 0.12), "subtitulos": (0.12, 0.06)}.get(stage, (0.18, 0.82))
+        state["progreso"] = round(base + span * p, 4)
         write()
 
     try:

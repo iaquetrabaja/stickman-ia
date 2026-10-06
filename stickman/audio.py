@@ -214,23 +214,59 @@ def word_timings(text: str, start: float, end: float, gaps: Sequence[Tuple[float
     return cues
 
 
-def group_captions(words: Sequence[Cue], max_words: int = 4, max_chars: int = 22) -> List[Cue]:
-    out: List[Cue] = []
+_SENT_END = re.compile(r"[.!?…]+[»\"')]*$")
+_SOFT = re.compile(r"[,;:—–]$")
+
+CAPTION_LEAD = 0.08   # el subtítulo aparece un poco antes de que empiece la voz
+CAPTION_HOLD = 0.15   # y se mantiene un poco tras la última palabra
+CAPTION_BRIDGE = 0.35  # huecos más cortos que esto se cierran (sin parpadeo)
+
+
+def _chunk_sentence(ws: List[Cue], max_words: int, max_chars: int, pause: float = 0.45) -> List[List[Cue]]:
+    chunks: List[List[Cue]] = []
     cur: List[Cue] = []
-    for w in words:
-        cand = " ".join(x.text for x in cur + [w])
-        if cur and (len(cur) >= max_words or len(cand) > max_chars):
-            out.append(Cue(" ".join(x.text for x in cur), cur[0].start, cur[-1].end))
-            cur = []
+    for w in ws:
+        if cur:
+            cand = " ".join(x.text for x in cur + [w])
+            long_pause = w.start - cur[-1].end > pause
+            if len(cur) >= max_words or len(cand) > max_chars or long_pause:
+                chunks.append(cur)
+                cur = []
         cur.append(w)
-        if _PAUSE.search(w.text) and len(cur) >= 2:
-            out.append(Cue(" ".join(x.text for x in cur), cur[0].start, cur[-1].end))
+        if _SOFT.search(w.text) and len(cur) >= 2:
+            chunks.append(cur)
             cur = []
     if cur:
-        out.append(Cue(" ".join(x.text for x in cur), cur[0].start, cur[-1].end))
-    # que no quede hueco entre subtítulos muy próximos
+        chunks.append(cur)
+    # sin palabras huérfanas al final de la frase
+    if len(chunks) >= 2 and len(chunks[-1]) == 1:
+        prev, last = chunks[-2], chunks[-1]
+        joined = " ".join(x.text for x in prev + last)
+        if len(prev) + 1 <= max_words + 1 and len(joined) <= max_chars + 4:
+            chunks[-2:] = [prev + last]
+        elif len(prev) >= 3:
+            chunks[-2:] = [prev[:-1], [prev[-1]] + last]
+    return chunks
+
+
+def group_captions(words: Sequence[Cue], max_words: int = 4, max_chars: int = 22,
+                   lead: float = CAPTION_LEAD, hold: float = CAPTION_HOLD) -> List[Cue]:
+    """Agrupa palabras cronometradas en subtítulos de 2-``max_words`` palabras sin cruzar
+    frases. Inicio = primera palabra - ``lead``; fin = última palabra + ``hold``; sin solapes."""
+    sentences: List[List[Cue]] = [[]]
+    for w in words:
+        sentences[-1].append(w)
+        if _SENT_END.search(w.text):
+            sentences.append([])
+    out: List[Cue] = []
+    for sent in sentences:
+        for ch in _chunk_sentence(sent, max_words, max_chars):
+            out.append(Cue(" ".join(x.text for x in ch), max(0.0, ch[0].start - lead), ch[-1].end + hold))
     for a, b in zip(out, out[1:]):
-        if 0 < b.start - a.end < 0.35:
+        if a.end > b.start:
+            a.end = max(a.start + 0.05, b.start)
+            b.start = max(b.start, a.end)
+        elif b.start - a.end < CAPTION_BRIDGE:
             a.end = b.start
     return out
 

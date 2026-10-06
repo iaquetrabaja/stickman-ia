@@ -5,6 +5,7 @@ Ejemplos:
   python -m stickman --offline                      # sin clave: guion de ejemplo + voz Piper
   python -m stickman --guion examples/regla-2-minutos.yaml --formato 16:9
   python -m stickman "tema" --review                # revisa/edita el guion antes de renderizar
+  python -m stickman --guion g.json --audio voz.wav  # usa una narración ya grabada (sin TTS)
   python -m stickman web --puerto 8000              # interfaz web
 """
 from __future__ import annotations
@@ -75,6 +76,10 @@ def main(argv=None) -> int:
     ap.add_argument("--escala", type=float, default=1.0,
                     help="escala de render (0.667 = 720p reescalado con ffmpeg, más rápido)")
     ap.add_argument("--max-segundos", type=float, default=120)
+    ap.add_argument("--audio", default=None,
+                    help="narración ya grabada (WAV, MP3, MP4...) en lugar de sintetizar la voz; requiere --guion")
+    ap.add_argument("--sin-alineacion", action="store_true",
+                    help="no alinear los subtítulos con la voz (tiempos estimados por longitud)")
     a = ap.parse_args(argv)
 
     from . import gemini
@@ -86,6 +91,8 @@ def main(argv=None) -> int:
     out = Path(a.salida)
     out.mkdir(parents=True, exist_ok=True)
     stats = Stats()
+    if a.audio and not (a.guion or a.offline):
+        ap.error("--audio necesita el guion de esa narración (--guion)")
     try:
         if a.offline:
             script = script_from_file(a.guion or OFFLINE_EXAMPLE)
@@ -110,7 +117,8 @@ def main(argv=None) -> int:
             _review(p)
             script = script_from_file(p)
         res = render_script(script, out, a.formato, a.motor_voz, key, a.modelo_tts, a.voz, a.fps, a.escala,
-                            a.max_segundos, basename=name, stats=stats)
+                            a.max_segundos, basename=name, stats=stats, narration=a.audio,
+                            word_align=not a.sin_alineacion)
         s = res["stats"]
         print(f"MP4: {res['mp4']}\nSRT: {res['srt']}\nLlamadas a la API: {s.api_calls}")
         return 0

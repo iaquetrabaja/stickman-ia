@@ -38,7 +38,7 @@ def test_word_timings_and_captions():
     assert all(w.end >= w.start for w in words)
     cues = group_captions(words, 4, 22)
     assert all(len(c.text.split()) <= 4 for c in cues)
-    assert to_srt(cues).startswith("1\n00:00:01,000 --> ")
+    assert to_srt(cues).startswith("1\n00:00:00,920 --> ")  # 80 ms antes de la voz
 
 
 def test_word_timings_snap_to_silence():

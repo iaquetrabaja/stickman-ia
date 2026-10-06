@@ -6,6 +6,9 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     STICKMAN_DATA=/data \
     STICKMAN_PIPER_DIR=/opt/piper \
+    STICKMAN_WHISPER_DIR=/opt/whisper \
+    STICKMAN_WHISPER_MODEL=base \
+    HF_HUB_DISABLE_TELEMETRY=1 \
     OMP_NUM_THREADS=2 \
     ROOT_PATH=""
 
@@ -18,12 +21,17 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+# Modelo Whisper para alinear los subtítulos con la voz, dentro de la imagen
+# (no depende de la red ni retrasa la primera petición)
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8', download_root='/opt/whisper')"
+ENV HF_HUB_OFFLINE=1
+
 COPY stickman ./stickman
 COPY examples ./examples
 
 # Voz Piper es_ES descargada en la imagen (no depende de la red al arrancar)
 RUN python -c "from stickman.tts import ensure_piper_voice; ensure_piper_voice('es')" \
-    && useradd -m -u 1000 stickman && mkdir -p /data && chown -R stickman /data /opt/piper
+    && useradd -m -u 1000 stickman && mkdir -p /data && chown -R stickman /data /opt/piper /opt/whisper
 
 USER stickman
 VOLUME ["/data"]

@@ -50,7 +50,13 @@ tema ──► Gemini (texto) ──► guion JSON validado ──► revisión/
 4. **Voz**: Gemini TTS en **una sola llamada** para toda la narración (ahorra cuota) que luego se trocea por
    escenas usando los silencios. Si no hay modelo TTS, se agota la cuota (429) o falla la red, se usa
    **Piper** en local (la voz `es_ES-davefx-medium` se descarga sola la primera vez, ~60 MB).
-5. **Render**: muñecos vectoriales con antialias (skia), poses interpoladas con *easing*, respiración,
+5. **Subtítulos sincronizados**: tras la voz, un reconocimiento de voz local
+   ([faster-whisper](https://github.com/SYSTRAN/faster-whisper) `base`, int8, CPU) da el instante de cada
+   palabra; esas marcas se alinean con las palabras del **guion** (que es lo que se muestra, sin faltas del
+   reconocedor) y las que no se reconocen se interpolan. Los subtítulos (2-5 palabras, sin cruzar frases)
+   aparecen 80 ms antes de que empiece la voz y el SRT usa los mismos tiempos. El modelo (~140 MB) se
+   descarga la primera vez; si no está disponible, los tiempos se estiman por longitud del texto.
+6. **Render**: muñecos vectoriales con antialias (skia), poses interpoladas con *easing*, respiración,
    parpadeo, boca sincronizada con la amplitud del audio, gestos al hablar, ciclo de andar, saltos,
    objetos que aparecen con rebote, zoom/paneo de cámara, texto clave con subrayado naranja y subtítulos
    grandes centrados (blanco con contorno negro). Los fotogramas se envían a ffmpeg por tubería
@@ -141,12 +147,15 @@ python -m stickman --guion mis-guiones/tema.guion.json --formato 16:9
 # Sin clave: guion de ejemplo + Piper (o cualquier guion propio con --motor-voz piper)
 python -m stickman --offline
 python -m stickman --guion examples/regla-2-minutos.yaml --formato 16:9 --motor-voz piper
+
+# Con una narración ya grabada (WAV, MP3 o el MP4 de un vídeo anterior): sin TTS
+python -m stickman --guion mi-guion.json --audio narracion.wav
 ```
 
 Opciones útiles: `--idioma en`, `--voz Kore` (30 voces de Gemini; en la web se pueden probar antes de generar: Puck (animada), Charon (informativa), Kore (firme), Sulafat (cálida), Achird (cercana),
 Leda, Zephyr...), `--motor-voz auto|gemini|piper`, `--modelo` / `--modelo-tts` para forzar modelos,
 `--escala 0.667` (renderiza a 720p y reescala con ffmpeg, más rápido en máquinas lentas), `--salida`,
-`--nombre`. La duración máxima es 120 s. La duración final es aproximada (±20 %): depende del ritmo de la voz.
+`--nombre`, `--sin-alineacion` (subtítulos con tiempos estimados, sin Whisper). La duración máxima es 120 s. La duración final es aproximada (±20 %): depende del ritmo de la voz.
 
 ## Interfaz web
 
@@ -171,6 +180,8 @@ Reglas del servidor (configurables con variables de entorno):
 | `MAX_COLA` | `20` | Trabajos máximos en cola |
 | `HORAS_BORRADO` | `24` | Los archivos se borran pasado este tiempo |
 | `ESCALA_RENDER` | `1.0` | `0.667` para renderizar a 720p y reescalar |
+| `STICKMAN_WHISPER_MODEL` | `base` | Modelo de alineación de subtítulos (`base` o `small`) |
+| `STICKMAN_WHISPER_DIR` | `$STICKMAN_DATA/whisper` | Dónde se guarda el modelo (en Docker va dentro de la imagen) |
 
 Se renderiza **un vídeo a la vez** (en un proceso aparte); la clave del usuario pasa al proceso de render
 por stdin, solo vive en memoria y nunca se escribe en disco ni en los logs.
@@ -208,7 +219,8 @@ Windows, CPU limitada a 2 núcleos (afinidad), 9:16 1080x1920 a 30 fps:
 | Guion de 6 escenas, Piper | 38,8 s | 44 s | 57 s |
 | Clave real (Gemini 3.8 flash + 3.8 flash TTS) | 45,2 s | 47 s | 92 s (incluye ~40 s de Gemini) |
 
-Memoria pico: ~350 MB Python (con Piper cargado) + ~300 MB ffmpeg.
+Memoria pico: ~350 MB Python (con Piper cargado) + ~300 MB ffmpeg. La alineación de subtítulos añade
+~3-6 s por vídeo y ~150 MB (modelo Whisper `base` int8).
 
 ## Tests
 
@@ -232,6 +244,7 @@ stickman/
   gemini.py             cliente REST mínimo (ListModels, texto JSON, TTS)
   tts.py                Gemini TTS / Piper
   audio.py              WAV, envolvente, silencios, subtítulos, SRT
+  align.py              subtítulos alineados palabra a palabra (faster-whisper + guion)
   render.py             escenas, cámara, props, textos y salida a ffmpeg
   props.py              objetos vectoriales
   text.py               texto (Roboto incluida)
@@ -252,6 +265,8 @@ tests/
   estructurados y un renderizador determinista dibuja) tomadas de
   [stickman-animation-agent](https://github.com/chrisaswain/stickman-animation-agent). No se ha copiado su
   código ni sus SVG: todos los dibujos de este proyecto son propios.
+- Alineación de subtítulos: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT) con los modelos
+  Whisper de OpenAI (MIT).
 - Voz local: [Piper](https://github.com/rhasspy/piper) y sus voces (cada una con su licencia).
 - Fuente: Roboto (Apache 2.0).
 
